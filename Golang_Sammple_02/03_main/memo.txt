@@ -1,0 +1,11 @@
+モジュールの読み込み
+
+#
+
+go mod init go-example
+go mod tidy
+
+
+
+go mod init github.com/hajimehoshi/ebiten/v2
+go mod add github.com/hajimehoshi/ebiten/v2/ebitenutil
