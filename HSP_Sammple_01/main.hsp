@@ -1,0 +1,143 @@
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+#define SQ_SIZE 32
+#define MOVE_TIMER_MAX 4
+
+#enum INPUT_KEY_NONE = 0
+#enum INPUT_KEY_UP
+#enum INPUT_KEY_DOWN
+#enum INPUT_KEY_LEFT
+#enum INPUT_KEY_RIGHT
+#enum INPUT_KEY_ESC
+
+dim input_key
+input_key = INPUT_KEY_NONE
+
+dim player_status_pos_x, player_status_pos_y
+dim player_status_pre_pos_x, player_status_pre_pos_y ; プレーヤーの前回の座標
+dim player_status_action_timer ; プレーヤーの点滅アニメーション用
+dim player_status_move_timer ; プレーヤーの移動アニメーション用
+player_status_pos_x = 5
+player_status_pos_y = 5
+player_status_pre_pos_x = player_status_pos_x
+player_status_pre_pos_y = player_status_pos_y
+player_status_action_timer = 0
+player_status_move_timer = 0
+
+goto *Main
+
+#deffunc SystemInit
+    randomize
+    font MSGOTHIC,16
+	screen 0, SCREEN_WIDTH, SCREEN_HEIGHT
+	return
+
+#deffunc UpdateInput
+	input_key = INPUT_KEY_NONE
+	
+	getkey tmp, 87 ; W
+	if tmp == 1 : input_key = INPUT_KEY_UP
+	getkey tmp, 83 ; S
+	if tmp == 1 : input_key = INPUT_KEY_DOWN
+	getkey tmp, 65 ; A
+	if tmp == 1 : input_key = INPUT_KEY_LEFT
+	getkey tmp, 68 ; D
+	if tmp == 1 : input_key = INPUT_KEY_RIGHT
+	getkey tmp, 27 ; Esc
+	if tmp == 1 : input_key = INPUT_KEY_ESC
+	
+	return
+
+#deffunc UpdateDatas
+
+	switch input_key
+	case INPUT_KEY_UP
+		if player_status_move_timer==0 { ; 移動中はキー入力を無効に
+			player_status_pre_pos_y = player_status_pos_y
+			player_status_pos_y = player_status_pos_y - 1
+			player_status_move_timer = MOVE_TIMER_MAX
+		}
+		swbreak
+	case INPUT_KEY_DOWN
+		if player_status_move_timer==0 {
+			player_status_pre_pos_y = player_status_pos_y
+			player_status_pos_y = player_status_pos_y + 1
+			player_status_move_timer = MOVE_TIMER_MAX
+		}
+		swbreak
+	case INPUT_KEY_LEFT
+		if player_status_move_timer==0 {
+			player_status_pre_pos_x = player_status_pos_x
+			player_status_pos_x = player_status_pos_x - 1
+			player_status_move_timer = MOVE_TIMER_MAX
+		}
+		swbreak
+	case INPUT_KEY_RIGHT
+		if player_status_move_timer==0 {
+			player_status_pre_pos_x = player_status_pos_x
+			player_status_pos_x = player_status_pos_x + 1
+			player_status_move_timer = MOVE_TIMER_MAX
+		}
+		swbreak
+	case INPUT_KEY_ESC ; ESCキーでゲーム終了
+		end
+	swend
+
+	player_status_action_timer++
+	if player_status_action_timer > 10 : player_status_action_timer = 0
+
+	if player_status_move_timer > 0 {
+		player_status_move_timer = player_status_move_timer - 1
+		
+		if player_status_move_timer == 0 {
+			player_status_pre_pos_x = player_status_pos_x
+			player_status_pre_pos_y = player_status_pos_y
+		}
+	}
+
+	return
+
+#deffunc DrawMainScreen
+    cls
+
+    ; プレーヤーの描画
+    if player_status_move_timer==0 {
+		color 255,128+player_status_action_timer*10,128+player_status_action_timer*10
+		x = SQ_SIZE*player_status_pos_x
+		y = SQ_SIZE*player_status_pos_y
+		boxf x,y,x+SQ_SIZE,y+SQ_SIZE
+	} else {
+		color 255,128+player_status_action_timer*10,128+player_status_action_timer*10
+		move_x = player_status_pos_x - player_status_pre_pos_x ; とりあえず、最終的なXYの移動量をそれぞれ計算
+		move_y = player_status_pos_y - player_status_pre_pos_y		
+
+		; MOVE_TIMER_MAX回、移動を段階的にする
+		x = player_status_pre_pos_x * SQ_SIZE + move_x * SQ_SIZE * (MOVE_TIMER_MAX - player_status_move_timer) / MOVE_TIMER_MAX
+		y = player_status_pre_pos_y * SQ_SIZE + move_y * SQ_SIZE * (MOVE_TIMER_MAX - player_status_move_timer) / MOVE_TIMER_MAX
+		
+		boxf x,y,x+SQ_SIZE,y+SQ_SIZE
+	}
+	return
+
+#deffunc PringDebugLog
+	color 0,0,0
+    mes "Key " + input_key
+    mes "Pos " + player_status_pos_x + "," + player_status_pos_y
+	return
+	
+*Main
+    SystemInit
+    
+    repeat
+    	; 入力、状態の更新、描画、デバックの表示、の4種類を各関数に分けて処理
+    	; メリットは、処理を明瞭に分けて管理しやすいのと、複数のものをアニメーションさせやすい（キャラクターの位置、キャラクターの表示、カメラの位置など）
+    	; 受け渡しが必要な情報は変数で中継する
+	    UpdateInput
+		UpdateDatas
+		DrawMainScreen
+	    
+        PringDebugLog
+		wait 3 ; 1秒間に30回更新するため1000/30=約3、アクションゲームではフレームレート60が定番、ただし、この方法だと誤差がある... HSPは wait 1 で10ミリ秒の更新
+    loop
+
+

@@ -1,0 +1,286 @@
+#uselib "winmm.dll"
+#cfunc global timeGetTime "timeGetTime"
+
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+#define SQ_SIZE 32
+#define MOVE_TIMER_MAX 4
+
+#enum INPUT_KEY_NONE = 0
+#enum INPUT_KEY_UP
+#enum INPUT_KEY_DOWN
+#enum INPUT_KEY_LEFT
+#enum INPUT_KEY_RIGHT
+#enum INPUT_KEY_ESC
+
+
+#define BUFFER_MAIN 0
+#enum BUFFER_IMAGE_TILES = 1
+#enum BUFFER_IMAGE_PLAYER
+#enum BUFFER_IMAGE_COIN
+
+#enum BUFFER_SOUND_ID_JUMP = 1
+#enum BUFFER_SOUND_ID_COIN
+
+#define COINS_NUM 5
+
+dim input_key
+
+dim player_status_pos_x
+dim player_status_pos_y
+dim player_status_pre_pos_x ; プレーヤーの前回の座標
+dim player_status_pre_pos_y
+dim player_status_action_timer ; プレーヤーの点滅アニメーション用
+dim player_status_move_timer ; プレーヤーの移動アニメーション用
+dim camera_pos_x
+dim camera_pos_y
+dim camera_pos_offset_x
+dim camera_pos_offset_y 
+
+dim map_sq_size_w
+dim map_sq_size_h
+dim map_sq_data, map_sq_size_w * map_sq_size_h
+dim coins_pos_x, COINS_NUM
+dim coins_pos_y, COINS_NUM
+
+goto *Main
+
+#deffunc SystemInit
+    randomize
+    font MSGOTHIC,16
+    
+	input_key = INPUT_KEY_NONE
+    
+	buffer BUFFER_IMAGE_TILES
+	picload "./image/Tiles.png"
+
+	buffer BUFFER_IMAGE_PLAYER
+	picload "./image/EmugenIdle.png", 2 ; 透明色を白
+
+	buffer BUFFER_IMAGE_COIN
+	picload "./image/Coin.png", 2 ; 透明色を白
+
+	mmload "./sound/Jump 6.wav", BUFFER_SOUND_ID_JUMP  
+	mmload "./sound/se_001.wav", BUFFER_SOUND_ID_COIN
+
+	; ダンジョンマップ
+	map_sq_size_w = 15
+	map_sq_size_h = 10
+
+	for i, 0, map_sq_size_w, 1
+		map_sq_data(i) = 1
+		map_sq_data(i + map_sq_size_w * (map_sq_size_h-1)) = 1
+	next
+	for i, 0, map_sq_size_h, 1
+		map_sq_data(map_sq_size_w * i) = 1
+		map_sq_data(map_sq_size_w * i + map_sq_size_w - 1) = 1
+	next
+
+	; コイン
+	for i, 0, COINS_NUM, 1
+		coins_pos_x(i) = rnd(map_sq_size_w-2) + 1
+		coins_pos_y(i) = rnd(map_sq_size_h-2) + 1
+	next
+
+	; プレーヤー
+	player_status_pos_x = 5
+	player_status_pos_y = 5
+	player_status_pre_pos_x = player_status_pos_x
+	player_status_pre_pos_y = player_status_pos_y
+	player_status_action_timer = 0
+	player_status_move_timer = 0
+
+	; カメラ
+	camera_pos_x = player_status_pos_x * SQ_SIZE - SQ_SIZE / 2
+	camera_pos_y = player_status_pos_y * SQ_SIZE - SQ_SIZE / 2
+	camera_pos_offset_x = camera_pos_x - SCREEN_WIDTH / 2
+	camera_pos_offset_y = camera_pos_y - SCREEN_HEIGHT / 2
+		
+	screen 0, SCREEN_WIDTH, SCREEN_HEIGHT
+	return
+
+#deffunc UpdateInput
+	input_key = INPUT_KEY_NONE
+	
+	getkey tmp, 87 ; W
+	if tmp == 1 : input_key = INPUT_KEY_UP
+	getkey tmp, 83 ; S
+	if tmp == 1 : input_key = INPUT_KEY_DOWN
+	getkey tmp, 65 ; A
+	if tmp == 1 : input_key = INPUT_KEY_LEFT
+	getkey tmp, 68 ; D
+	if tmp == 1 : input_key = INPUT_KEY_RIGHT
+	getkey tmp, 27 ; Esc
+	if tmp == 1 : input_key = INPUT_KEY_ESC
+	
+	return
+
+#deffunc GetMapSqData int _x, int _y
+	tmp = map_sq_data(_x \ map_sq_size_w + _y * map_sq_size_w )
+	return 
+
+#deffunc UpdateDatas
+
+	switch input_key
+	case INPUT_KEY_UP
+		if player_status_move_timer==0 { ; 移動中はキー入力を無効に
+			GetMapSqData player_status_pos_x, player_status_pos_y - 1
+			if ( tmp != 1 ) {
+				player_status_pre_pos_y = player_status_pos_y
+				player_status_pos_y = player_status_pos_y - 1
+				player_status_move_timer = MOVE_TIMER_MAX
+				mmplay BUFFER_SOUND_ID_JUMP
+			}
+		}
+		swbreak
+	case INPUT_KEY_DOWN
+		if player_status_move_timer==0 {
+			GetMapSqData player_status_pos_x, player_status_pos_y + 1
+			if ( tmp != 1 ) {
+				player_status_pre_pos_y = player_status_pos_y
+				player_status_pos_y = player_status_pos_y + 1
+				player_status_move_timer = MOVE_TIMER_MAX
+				mmplay BUFFER_SOUND_ID_JUMP
+			}
+		}
+		swbreak
+	case INPUT_KEY_LEFT
+		if player_status_move_timer==0 {
+			GetMapSqData player_status_pos_x-1, player_status_pos_y
+			if ( tmp != 1 ) {
+				player_status_pre_pos_x = player_status_pos_x
+				player_status_pos_x = player_status_pos_x - 1
+				player_status_move_timer = MOVE_TIMER_MAX
+				mmplay BUFFER_SOUND_ID_JUMP
+			}
+		}
+		swbreak
+	case INPUT_KEY_RIGHT
+		if player_status_move_timer==0 {
+			GetMapSqData player_status_pos_x+1, player_status_pos_y
+			if ( tmp != 1 ) {
+				player_status_pre_pos_x = player_status_pos_x
+				player_status_pos_x = player_status_pos_x + 1
+				player_status_move_timer = MOVE_TIMER_MAX
+				mmplay BUFFER_SOUND_ID_JUMP
+			}
+		}
+		swbreak
+	case INPUT_KEY_ESC ; ESCキーでゲーム終了
+		end
+	swend
+
+	player_status_action_timer++
+	if player_status_action_timer > 10 : player_status_action_timer = 0
+
+	if player_status_move_timer > 0 {
+		player_status_move_timer = player_status_move_timer - 1
+		
+		if player_status_move_timer == 0 {
+			player_status_pre_pos_x = player_status_pos_x
+			player_status_pre_pos_y = player_status_pos_y
+		}
+	}
+
+	; コイン
+	for i, 0, COINS_NUM, 1
+		if ( coins_pos_x(i) !=0 ) {
+			x1 = coins_pos_x(i)
+			y1 = coins_pos_y(i)
+			if ( ( x1 == player_status_pos_x ) && ( y1 == player_status_pos_y ) ) {
+				coins_pos_x(i) = 0
+				coins_pos_y(i) = 0
+				mmplay BUFFER_SOUND_ID_COIN
+			}
+			
+		}
+	next
+
+	; カメラ
+	x1 = camera_pos_x - player_status_pos_x * SQ_SIZE - SQ_SIZE / 2
+	y1 = camera_pos_y - player_status_pos_y * SQ_SIZE - SQ_SIZE / 2
+
+	camera_pos_x = camera_pos_x - x1 * 1 / 5
+	camera_pos_y = camera_pos_y - y1 * 1 / 5
+	camera_pos_offset_x = camera_pos_x - SCREEN_WIDTH / 2
+	camera_pos_offset_y = camera_pos_y - SCREEN_HEIGHT / 2
+	return
+
+#deffunc DrawMainScreen
+    redraw 0
+
+    color 0, 0, 0
+    boxf 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+
+    ; マップ
+	x = 32
+	y = 32
+	for i, 0, (map_sq_size_w * map_sq_size_h), 1
+		if ( map_sq_data(i) = 1) {
+			x1 = i \ map_sq_size_w
+			y1 = i / map_sq_size_w
+			pos 32*x1 - camera_pos_offset_x, 32*y1 - camera_pos_offset_y
+			gcopy BUFFER_IMAGE_TILES, 0, 0, 32, 32
+		} else {
+			x1 = i \ map_sq_size_w
+			y1 = i / map_sq_size_w
+			pos 32*x1 - camera_pos_offset_x, 32*y1 - camera_pos_offset_y
+
+			j = i \ 2
+			if ( j == 0) {
+				gcopy BUFFER_IMAGE_TILES, 32, 0, 32, 32
+			} else {
+				gcopy BUFFER_IMAGE_TILES, 32, 32, 32, 32
+			}
+				
+		}
+	next
+
+	; コイン
+	for i, 0, COINS_NUM, 1
+		if ( coins_pos_x(i) !=0 ) {
+			x1 = coins_pos_x(i)
+			y1 = coins_pos_y(i)
+			pos 32*x1 - camera_pos_offset_x + 8, 32*y1 - camera_pos_offset_y + 8
+			color 0,0,0:gmode 4,0,0,256	;白を透明化
+			gcopy BUFFER_IMAGE_COIN, 0, 0, 48, 48
+		}
+	next
+	
+
+    ; プレーヤー
+	;color 255,128+player_status_action_timer*10,128+player_status_action_timer*10
+	x = SQ_SIZE*player_status_pos_x - 8
+	y = SQ_SIZE*player_status_pos_y - 12
+
+	pos x - camera_pos_offset_x, y - camera_pos_offset_y
+	color 0,0,0:gmode 4,0,0,256	;白を透明化
+	gcopy BUFFER_IMAGE_PLAYER, 0, 0, 48, 48
+
+	redraw
+	return
+
+#deffunc PringDebugLog
+	pos 0, 0
+	color 255,255,255
+    mes "Key " + input_key
+    mes "Pos " + player_status_pos_x + "," + player_status_pos_y
+
+	return
+	
+*Main
+    SystemInit
+    
+    repeat
+    	; 入力、状態の更新、描画、デバックの表示、の4種類を各関数に分けて処理
+    	; メリットは、処理を明瞭に分けて管理しやすいのと、複数のものをアニメーションさせやすい（キャラクターの位置、キャラクターの表示、カメラの位置など）
+    	; 受け渡しが必要な情報は変数で中継する
+	    UpdateInput
+		UpdateDatas
+		DrawMainScreen
+	    
+        PringDebugLog
+        await 33 ; 
+    loop
+
+
